@@ -1,5 +1,3 @@
-import io
-import numpy as np
 import pandas as pd
 
 class FormCSV:
@@ -7,35 +5,16 @@ class FormCSV:
     self.filename = filename
     self.parse()
 
-  @staticmethod
-  def time_to_seconds(time_str: str) -> float | np.nan:
-    """
-    Convert time string in format 'mm:ss' to seconds.
-    """
-    # Handles cases where time_str might be NaN or not a string
-    if pd.isna(time_str) or not isinstance(time_str, str):
-        return np.nan
-    parts = time_str.split(':')
-    if len(parts) == 2:
-        minutes = float(parts[0])
-        seconds = float(parts[1])
-        return minutes * 60 + seconds
-    return np.nan
-
   def parse(self):
-    with open(self.filename) as f:
-      lines = f.readlines()
+    # Read the first two lines as the description (header + 1 row of data)
+    self.description_df = pd.read_csv(self.filename, nrows=1)
 
-    # The first two lines correspond to the description
-    description_csv = ''.join(lines[:2])
-    description_io = io.StringIO(description_csv)
-    self.description_df = pd.read_csv(description_io)
-
-    # There is a blank line then the remaining lines are the swim data
-    swim_csv = ''.join(lines[3:])
-    swim_io = io.StringIO(swim_csv)
-    self.swim_df = pd.read_csv(swim_io)
+    # Skip the description and the blank line (first 3 lines) to read swim data
+    self.swim_df = pd.read_csv(self.filename, skiprows=3)
 
     # Convert 'Cumul Time' and 'Move Time' to seconds
-    self.swim_df['Cumul Time (s)'] = self.swim_df['Cumul Time'].apply(self.time_to_seconds)
-    self.swim_df['Move Time (s)'] = self.swim_df['Move Time'].apply(self.time_to_seconds)
+    for col in ['Cumul Time', 'Move Time']:
+        if col in self.swim_df.columns:
+            # Prepend '00:' to convert 'mm:ss' to 'hh:mm:ss' for pandas to_timedelta
+            time_strings = '00:' + self.swim_df[col].astype(str)
+            self.swim_df[f'{col} (s)'] = pd.to_timedelta(time_strings, errors='coerce').dt.total_seconds()
